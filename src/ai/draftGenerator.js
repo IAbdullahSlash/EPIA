@@ -61,7 +61,7 @@ class GeminiError extends Error {
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-async function callGemini(prompt, { apiKey, model, fetchImpl = fetch, timeoutMs = 15000 }) {
+async function callGemini(prompt, { apiKey, model, fetchImpl = fetch, timeoutMs = 10000 }) {
   let res;
   try {
     res = await fetchImpl(`${GEMINI_URL}/${encodeURIComponent(model)}:generateContent`, {
@@ -75,7 +75,8 @@ async function callGemini(prompt, { apiKey, model, fetchImpl = fetch, timeoutMs 
       signal: AbortSignal.timeout(timeoutMs),
     });
   } catch (err) {
-    throw new GeminiError(`${model}: ${err.name === 'TimeoutError' ? 'request timed out' : err.message}`, true);
+    const timedOut = err.name === 'TimeoutError';
+    throw new GeminiError(`${model}: ${timedOut ? 'request timed out' : err.message}`, !timedOut);
   }
 
   const body = await res.json().catch(() => ({}));

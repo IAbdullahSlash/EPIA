@@ -10,7 +10,7 @@ module.exports = {
   timezone: process.env.CLINIC_TIMEZONE || Intl.DateTimeFormat().resolvedOptions().timeZone,
   gemini: {
     apiKey: process.env.GEMINI_API_KEY || '',
-    model: process.env.GEMINI_MODEL || 'gemini-3.8-flash',
-    fallbackModel: process.env.GEMINI_FALLBACK_MODEL ?? 'gemini-3.1-flash-lite',
+    model: process.env.GEMINI_MODEL || 'gemini-3.1-flash-lite',
+    fallbackModel: process.env.GEMINI_FALLBACK_MODEL ?? 'gemini-3.8-flash',
   },
 };
