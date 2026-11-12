@@ -2,10 +2,10 @@ const request = require('supertest');
 const { openDatabase } = require('../src/db');
 const { createApp } = require('../src/app');
 
-function buildApp(overrides = {}) {
+function buildApp({ fetchImpl, ...overrides } = {}) {
   const db = openDatabase(':memory:');
   const config = { timezone: 'UTC', clinicName: 'EPIA Fertility', gemini: { apiKey: '' }, ...overrides };
-  const app = createApp({ db, config });
+  const app = createApp({ db, config, fetchImpl });
   return { db, app, api: request(app) };
 }
 
