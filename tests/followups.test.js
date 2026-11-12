@@ -83,6 +83,28 @@ test('generate falls back to a labelled mock draft when Gemini fails', async () 
   assert.match(res.body.warnings[0].warning, /quota exceeded/);
 });
 
+test('generate retries, then switches to the fallback model when the primary is overloaded', async () => {
+  const calls = [];
+  const fetchImpl = async (url) => {
+    calls.push(url);
+    const primary = url.includes('primary-model');
+    return {
+      ok: !primary,
+      status: primary ? 503 : 200,
+      json: async () =>
+        primary ? { error: { message: 'high demand' } } : { candidates: [{ content: { parts: [{ text: 'Hi Test, from the fallback.' }] } }] },
+    };
+  };
+  const { api } = buildApp({ gemini: { apiKey: 'k', model: 'primary-model', fallbackModel: 'backup-model' }, fetchImpl });
+  await api.post('/api/patients').send(validPatient({ next_followup_date: '2026-01-15' }));
+
+  const res = await api.post('/api/followups/generate').send({ date: '2026-01-15' });
+  assert.equal(calls.filter((u) => u.includes('primary-model')).length, 2);
+  assert.equal(res.body.generated[0].source, 'ai');
+  assert.equal(res.body.generated[0].model, 'backup-model');
+  assert.equal(res.body.generated[0].message, 'Hi Test, from the fallback.');
+});
+
 test('staff can edit then approve a draft, which returns a WhatsApp link without sending', async () => {
   const { api } = buildApp();
   await seed(api);

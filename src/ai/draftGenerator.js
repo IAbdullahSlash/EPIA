@@ -50,34 +50,71 @@ function cleanMessage(text) {
   return text.trim().replace(/^["'“”]+|["'“”]+$/g, '').trim();
 }
 
-async function callGemini(prompt, { apiKey, model, fetchImpl = fetch, timeoutMs = 20000 }) {
-  const res = await fetchImpl(`${GEMINI_URL}/${encodeURIComponent(model)}:generateContent`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
-    body: JSON.stringify({
-      systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
-      contents: [{ role: 'user', parts: [{ text: prompt }] }],
-      generationConfig: { temperature: 0.7 },
-    }),
-    signal: AbortSignal.timeout(timeoutMs),
-  });
+const RETRYABLE_STATUS = new Set([429, 500, 503, 504]);
+
+class GeminiError extends Error {
+  constructor(message, retryable) {
+    super(message);
+    this.retryable = retryable;
+  }
+}
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+async function callGemini(prompt, { apiKey, model, fetchImpl = fetch, timeoutMs = 15000 }) {
+  let res;
+  try {
+    res = await fetchImpl(`${GEMINI_URL}/${encodeURIComponent(model)}:generateContent`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
+      body: JSON.stringify({
+        systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
+        contents: [{ role: 'user', parts: [{ text: prompt }] }],
+        generationConfig: { temperature: 0.7 },
+      }),
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+  } catch (err) {
+    throw new GeminiError(`${model}: ${err.name === 'TimeoutError' ? 'request timed out' : err.message}`, true);
+  }
 
   const body = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(`Gemini API ${res.status}: ${body.error?.message || res.statusText}`);
+  if (!res.ok) {
+    throw new GeminiError(`${model} ${res.status}: ${body.error?.message || res.statusText}`, RETRYABLE_STATUS.has(res.status));
+  }
 
   const text = (body.candidates?.[0]?.content?.parts || []).map((p) => p.text || '').join('');
-  if (!text.trim()) throw new Error(`Gemini returned no text (finishReason: ${body.candidates?.[0]?.finishReason || 'unknown'})`);
+  if (!text.trim()) {
+    throw new GeminiError(`${model} returned no text (finishReason: ${body.candidates?.[0]?.finishReason || 'unknown'})`, true);
+  }
   return cleanMessage(text);
 }
 
-async function generateDraft(patient, { clinicName, today, gemini, fetchImpl }) {
+async function callWithRetries(prompt, gemini, { attempts = 2, backoffMs = 800 } = {}) {
+  const models = [gemini.model, gemini.fallbackModel].filter((m, i, all) => m && all.indexOf(m) === i);
+  const errors = [];
+  for (const model of models) {
+    for (let attempt = 1; attempt <= attempts; attempt++) {
+      try {
+        return { message: await callGemini(prompt, { ...gemini, model }), model };
+      } catch (err) {
+        errors.push(err.message);
+        if (!err.retryable) break;
+        if (attempt < attempts) await sleep(backoffMs * attempt);
+      }
+    }
+  }
+  throw new Error(errors.join(' | '));
+}
+
+async function generateDraft(patient, { clinicName, today, gemini, fetchImpl, retry }) {
   const context = { clinicName, today };
   if (!gemini?.apiKey) {
     return { message: mockDraft(patient, context), source: 'mock', warning: 'GEMINI_API_KEY not set, used mock draft' };
   }
   try {
-    const message = await callGemini(buildPrompt(patient, context), { ...gemini, fetchImpl });
-    return { message, source: 'ai' };
+    const { message, model } = await callWithRetries(buildPrompt(patient, context), { ...gemini, fetchImpl }, retry);
+    return { message, source: 'ai', model };
   } catch (err) {
     return { message: mockDraft(patient, context), source: 'mock', warning: `AI unavailable, used mock draft: ${err.message}` };
   }

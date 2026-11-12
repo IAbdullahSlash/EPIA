@@ -19,6 +19,7 @@ const SCHEMA = `
     patient_id  INTEGER NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
     message     TEXT NOT NULL,
     source      TEXT NOT NULL CHECK (source IN ('ai', 'mock')),
+    model       TEXT,
     status      TEXT NOT NULL DEFAULT 'pending_review' CHECK (status IN ('pending_review', 'approved', 'rejected')),
     created_at  TEXT NOT NULL DEFAULT (datetime('now')),
     reviewed_at TEXT

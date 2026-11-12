@@ -54,22 +54,26 @@ function followupsRouter({ db, config, fetchImpl }) {
       .all(date);
 
     const hasOpenDraft = db.prepare("SELECT 1 FROM message_drafts WHERE patient_id = ? AND status IN ('pending_review', 'approved')");
-    const insert = db.prepare('INSERT INTO message_drafts (patient_id, message, source) VALUES (?, ?, ?)');
+    const insert = db.prepare('INSERT INTO message_drafts (patient_id, message, source, model) VALUES (?, ?, ?, ?)');
 
-    const generated = [];
-    const skipped = [];
+    const toDraft = due.filter((p) => !hasOpenDraft.get(p.id));
+    const skipped = due
+      .filter((p) => !toDraft.includes(p))
+      .map((p) => ({ patient_id: p.id, patient_name: p.name, reason: 'Draft already awaiting review or approved' }));
+
+    const drafts = await Promise.all(
+      toDraft.map((patient) =>
+        generateDraft(patient, { clinicName: config.clinicName, today: date, gemini: config.gemini, fetchImpl, retry: config.aiRetry }),
+      ),
+    );
+
     const warnings = [];
-
-    for (const patient of due) {
-      if (hasOpenDraft.get(patient.id)) {
-        skipped.push({ patient_id: patient.id, patient_name: patient.name, reason: 'Draft already awaiting review or approved' });
-        continue;
-      }
-      const draft = await generateDraft(patient, { clinicName: config.clinicName, today: date, gemini: config.gemini, fetchImpl });
+    const generated = toDraft.map((patient, i) => {
+      const draft = drafts[i];
       if (draft.warning) warnings.push({ patient_id: patient.id, warning: draft.warning });
-      const { lastInsertRowid } = insert.run(patient.id, draft.message, draft.source);
-      generated.push(findDraft.get(lastInsertRowid));
-    }
+      const { lastInsertRowid } = insert.run(patient.id, draft.message, draft.source, draft.model ?? null);
+      return findDraft.get(lastInsertRowid);
+    });
 
     res.status(201).json({
       date,
