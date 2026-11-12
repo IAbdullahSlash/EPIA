@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>EPIA Follow-up Review</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <div>
+      <h1>EPIA Follow-ups</h1>
+      <p class="muted">Staff review of WhatsApp follow-up drafts. Nothing is sent without your approval.</p>
+    </div>
+    <div id="mode" class="badge">Loading…</div>
+  </header>
+
+  <div id="toast" class="toast" hidden></div>
+
+  <main>
+    <section class="panel">
+      <div class="panel-head">
+        <div>
+          <h2>1. Due for follow-up</h2>
+          <p class="muted" id="due-caption">Pending patients due today or overdue.</p>
+        </div>
+        <button id="generate" class="primary">Generate drafts</button>
+      </div>
+      <div id="due-list"></div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head">
+        <div>
+          <h2>2. Review drafts</h2>
+          <p class="muted">Edit if needed, then approve or reject.</p>
+        </div>
+      </div>
+      <div id="review-list"></div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head">
+        <div>
+          <h2>3. Approved, ready to send</h2>
+          <p class="muted">Open WhatsApp and press send yourself, then mark the follow-up as completed.</p>
+        </div>
+      </div>
+      <div id="approved-list"></div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head">
+        <div>
+          <h2>Patients</h2>
+          <p class="muted">All patients in the system.</p>
+        </div>
+      </div>
+      <form id="add-patient" class="add-form">
+        <label>Name<input name="name" required maxlength="100" placeholder="Jane Doe"></label>
+        <label>Phone<input name="phone" required placeholder="+923001234567"></label>
+        <label>Consultation<input name="consultation_date" type="date" required></label>
+        <label>Next follow-up<input name="next_followup_date" type="date" required></label>
+        <button type="submit">Add patient</button>
+      </form>
+      <div id="form-errors" class="errors" hidden></div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Name</th><th>Phone</th><th>Consultation</th><th>Follow-up</th><th>Status</th></tr></thead>
+          <tbody id="patients"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head"><h2>Draft history</h2></div>
+      <div id="history-list"></div>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
